@@ -232,14 +232,15 @@ class AntiAddition
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($bodyParams));
         }
         $data = curl_exec($ch);
-        if (curl_errno($ch)) {
+         if (curl_errno($ch)) {
             echo "Error: " . curl_error($ch);
+            curl_close($ch);
+            return false;
         } else {
+            curl_close($ch);
             var_dump($data);
+            return json_decode($data, true);
         }
-        curl_close($ch);
-
-        return $data;
     }
 
     /**
