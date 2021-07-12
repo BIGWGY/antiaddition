@@ -25,6 +25,29 @@ class AntiAddition
     }
 
     /**
+     * 请求失败认证
+     * @param $name
+     * @param $idNum
+     * @return bool
+     */
+    public static function requestIdentityCheck($name, $idNum){
+        $result = self::checkIdentity($name, $idNum, self::ai($idNum));
+        if ($result !== false){
+            return true;
+        }
+
+        $result = self::queryIdentity(self::ai($idNum));
+        if ($result !== false){
+            return true;
+        }
+        return false;
+    }
+
+    public static function ai($idNumber) {
+        return md5($idNumber);
+    }
+
+    /**
      * 身份认证.
      *
      * 接口调用地址：https://api.wlc.nppa.gov.cn/idcard/authentication/check
@@ -51,17 +74,20 @@ class AntiAddition
             $url = "https://wlc.nppa.gov.cn/test/authentication/check/$testCode";
         }
         $response = self::curl('POST', $url, [], $postParams);
-        if (!empty($response['data']['result']['status'])){
+        if (isset($response['data']['result']['status'])){
             $status = $response['data']['result']['status'];
             if ($status == 0) {
+                // 认证成功
                 return $response['data']['result']['pi'];
             } elseif ($status == 1) {
-                return -1;
+                // 认证中
+                return false;
             } elseif ($status == 2) {
-                return -2;
+                // 认证失败
+                return false;
             }
         }
-        return -3;
+        return false;
     }
 
     /**
@@ -88,17 +114,20 @@ class AntiAddition
             $url = "https://wlc.nppa.gov.cn/test/authentication/query/$testCode";
         }
         $response = self::curl('GET', $url, $queryParams, []);
-        if (!empty($response['data']['result']['status'])){
+        if (isset($response['data']['result']['status'])){
             $status = $response['data']['result']['status'];
             if ($status == 0) {
+                // 认证成功
                 return $response['data']['result']['pi'];
             } elseif ($status == 1) {
-                return -1;
+                // 认证中
+                return false;
             } elseif ($status == 2) {
-                return -2;
+                // 认证失败
+                return false;
             }
         }
-        return -3;
+        return false;
     }
 
     /**
@@ -124,10 +153,25 @@ class AntiAddition
             $url = "https://wlc.nppa.gov.cn/test/collection/loginout/$testCode";
         }
         $response = self::curl('POST', $url, [], $postParams);
-        if (!empty($response['errcode'])){
-            return 0;
+        if (isset($response['errcode']) && $response['errcode'] == 0){
+            return true;
         }
-        return -1;
+        return false;
+    }
+
+    /**
+     * 上报数据
+     * @param string $sessionId
+     * @param int $behaviorId 游戏用户行为类型  0：下线 1：上线
+     * @param int $isGuest 用户行为数据上报类型 0：已认证通过用户 2：游客用户
+     * @param string $deviceId
+     * @param int $uid
+     * @return array
+     */
+    public static function reportGameData($sessionId, $behaviorId, $isGuest, $deviceId, $uid){
+        $list = array();
+        $list[] = self::createBehaviorObject(1, md5($sessionId), $behaviorId, time(), $isGuest, $deviceId, $uid);
+        return $list;
     }
 
     /**
@@ -146,7 +190,7 @@ class AntiAddition
      * 有任何影响
      * </pre>
      * @param int $behaviorId   游戏用户行为类型  0：下线 1：上线
-     * @param long $timestamp 行为发生时间戳，单位秒
+     * @param int $timestamp 行为发生时间戳，单位秒
      * @param int $isGuest  用户行为数据上报类型 0：已认证通过用户 2：游客用户
      * @param string $deviceId  游客模式设备标识，由游戏运营单位生成，游客用户下必填
      * @param string $identityId  已通过实名认证用户的唯一标识，已认证通过用户必填
@@ -232,7 +276,7 @@ class AntiAddition
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($bodyParams));
         }
         $data = curl_exec($ch);
-         if (curl_errno($ch)) {
+        if (curl_errno($ch)) {
             echo "Error: " . curl_error($ch);
             curl_close($ch);
             return false;
